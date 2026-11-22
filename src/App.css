@@ -357,3 +357,16 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .panel input[type="text"], .panel input[type="email"], .panel input[type="password"] { font-size: 16px; min-height: 48px; }
   .finished-row .secondary-btn { width: 100%; }
 }
+
+/* ---------- Campeón ---------- */
+.champion {
+  position: relative; overflow: hidden; text-align: center; margin-bottom: 22px; padding: 30px 16px;
+  border: 4px solid #000; outline: 4px solid var(--yellow);
+  background: repeating-conic-gradient(var(--red) 0 9deg, var(--red-dark) 9deg 18deg);
+  box-shadow: 8px 8px 0 #000;
+  animation: champion-in .6s cubic-bezier(.2, 1.4, .4, 1) both;
+}
+.champion-kicker { display: inline-block; background: #000; color: var(--yellow); padding: 6px 14px; font-family: var(--display); font-size: 20px; font-weight: 800; letter-spacing: 3px; }
+.champion strong { display: block; margin: 10px 0 2px; font-family: var(--display); font-size: clamp(56px, 14vw, 120px); font-style: italic; font-weight: 900; line-height: 1; text-transform: uppercase; color: #fff; text-shadow: 5px 5px 0 #000; overflow-wrap: anywhere; }
+.champion small { display: block; color: #fff; font-size: 16px; font-weight: 600; text-shadow: 2px 2px 0 #000; }
+@keyframes champion-in { from { opacity: 0; transform: scale(.85) rotate(-2deg); } to { opacity: 1; transform: none; } }

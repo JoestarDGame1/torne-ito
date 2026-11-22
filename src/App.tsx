@@ -85,6 +85,22 @@ function App() {
         y.round_number - x.round_number ||
         y.match_number - x.match_number,
     );
+  
+    const grandFinal1 = matches.find((m) => m.bracket_type === "grand_final" && m.round_number === 1);
+  const grandFinal2 = matches.find((m) => m.bracket_type === "grand_final" && m.round_number === 2);
+  const championFromFirstFinal =
+    grandFinal1?.status === "finished" && grandFinal1.winner_id === grandFinal1.player_1_id
+      ? grandFinal1.winner_id
+      : null;
+  const champion: string | null =
+    grandFinal2?.status === "finished" ? grandFinal2.winner_id : championFromFirstFinal;
+  const resetPending =
+    grandFinal1?.status === "finished" &&
+    !championFromFirstFinal &&
+    grandFinal2?.status !== "finished";
+  const bracketMatches = championFromFirstFinal
+    ? matches.filter((m) => m.id !== grandFinal2?.id)
+    : matches;
 
   useEffect(() => {
     async function checkConnection() {
@@ -570,6 +586,13 @@ function App() {
         </header>
 
         <div className="content">
+                    {champion && (tab === "Inicio" || tab === "Bracket") && (
+            <section className="champion">
+              <span className="champion-kicker">★ CAMPEÓN DE TORNE-ITO ★</span>
+              <strong>{playerTag(champion)}</strong>
+              <small>{players.find((p) => p.id === champion)?.name}</small>
+            </section>
+          )}
           {tab === "Inicio" && (
             <>
                             <section className="hero-banner">
@@ -650,11 +673,16 @@ function App() {
 
                     {tab === "Bracket" && (
             <Page title="Bracket" subtitle="EL CAMINO HACIA LA VICTORIA">
+                            {resetPending && !champion && (
+                <div className="notice">
+                  El jugador de Losers ganó la Gran Final: se juega una serie decisiva (reset).
+                </div>
+              )}
               {matches.length === 0 ? (
                 <div className="notice">El bracket aún no ha sido generado.</div>
               ) : (
                 (["winners", "losers", "grand_final"] as const).map((type) => {
-                  const section = matches.filter((m) => m.bracket_type === type);
+                                    const section = bracketMatches.filter((m) => m.bracket_type === type);
                   if (section.length === 0) return null;
                   const rounds = Array.from(new Set(section.map((m) => m.round_number))).sort(
                     (a, b) => a - b,
