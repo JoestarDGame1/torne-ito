@@ -332,3 +332,28 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .hero-banner { border: 1px solid var(--line); border-bottom: 5px solid var(--yellow); background: #000; overflow: hidden; }
 .hero-banner img { display: block; width: 100%; height: auto; }
 .hero-actions { margin: 22px 0 0; display: flex; gap: 12px; flex-wrap: wrap; }
+
+/* ---------- Resultados (táctil) ---------- */
+.result-card { border-top: 1px solid var(--line); padding: 16px 0; }
+.result-head { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; font-family: var(--display); font-size: 15px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.result-head b { color: #fff; font-weight: 700; }
+.result-row { display: grid; grid-template-columns: 1fr 88px; align-items: center; gap: 12px; padding: 8px 12px; margin-bottom: 8px; background: var(--panel-2); }
+.result-row.p1 { border-left: 5px solid var(--red); }
+.result-row.p2 { border-left: 5px solid var(--blue-light); }
+.result-row strong { font-family: var(--display); font-size: 26px; font-weight: 800; text-transform: uppercase; overflow-wrap: anywhere; }
+.result-row input.score-input { width: 100%; height: 56px; padding: 0; text-align: center; font-family: var(--display); font-size: 32px; font-weight: 900; }
+.score-input::-webkit-inner-spin-button, .score-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.score-input { -moz-appearance: textfield; appearance: textfield; }
+
+.finished-list { margin-top: 22px; border-top: 2px solid var(--line); }
+.finished-list summary { cursor: pointer; padding: 14px 0; font-family: var(--display); font-size: 20px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; color: var(--yellow); }
+.finished-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--line); padding: 12px 0; }
+.finished-row strong { display: block; font-family: var(--display); font-size: 22px; font-weight: 800; text-transform: uppercase; }
+.finished-round { display: block; color: var(--muted); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+.finished-row .secondary-btn { min-height: 46px; }
+
+@media (max-width: 620px) {
+  .full-btn { min-height: 54px; }
+  .panel input[type="text"], .panel input[type="email"], .panel input[type="password"] { font-size: 16px; min-height: 48px; }
+  .finished-row .secondary-btn { width: 100%; }
+}

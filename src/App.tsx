@@ -77,6 +77,15 @@ function App() {
         x.match_number - y.match_number,
     );
 
+    const correctableMatches = matches
+    .filter((m) => m.status === "finished" && m.player_1_id && m.player_2_id)
+    .sort(
+      (x, y) =>
+        bracketOrder[y.bracket_type] - bracketOrder[x.bracket_type] ||
+        y.round_number - x.round_number ||
+        y.match_number - x.match_number,
+    );
+
   useEffect(() => {
     async function checkConnection() {
       try {
@@ -237,6 +246,32 @@ function App() {
       );
       await loadTournamentAndPlayers();
     }
+
+      async function reopenMatch(match: Match) {
+    const p1 = playerTag(match.player_1_id);
+    const p2 = playerTag(match.player_2_id);
+
+    const confirmed = window.confirm(
+      `${p1} ${match.score_player_1 ?? 0} - ${match.score_player_2 ?? 0} ${p2}\n\nSe borrará este resultado y la partida volverá a pendiente para capturarla de nuevo. ¿Continuar?`,
+    );
+    if (!confirmed) return;
+
+    setResultBusyId(match.id);
+    setResultMessage("");
+
+    const { error } = await supabase.rpc("reopen_match", { p_match_id: match.id });
+
+    setResultBusyId(null);
+
+    if (error) {
+      console.error("Error corrigiendo resultado:", error.message);
+      setResultMessage(`No se pudo corregir: ${error.message}`);
+      return;
+    }
+
+    setResultMessage("Resultado borrado. Captura el resultado correcto en la lista de partidas listas.");
+    if (tournament) await loadMatches(tournament.id);
+  }
 
     async function reportResult(match: Match) {
     const input = scoreInputs[match.id] ?? { a: "", b: "" };
@@ -872,12 +907,13 @@ function App() {
                             : "No hay partidas listas en este momento."}
                         </p>
                         {resultMessage && <p role="status">{resultMessage}</p>}
-                        {playableMatches.map((match) => {
+                        
+                                                {playableMatches.map((match) => {
                           const input = scoreInputs[match.id] ?? { a: "", b: "" };
                           const busy = resultBusyId === match.id;
                           return (
-                            <div className="match-card" key={match.id}>
-                              <div className="match-round">
+                            <div className="result-card" key={match.id}>
+                              <div className="result-head">
                                 <span>{match.round_name}</span>
                                 <b>
                                   {match.bracket_type === "winners"
@@ -887,19 +923,18 @@ function App() {
                                       : "GRAN FINAL"}
                                 </b>
                               </div>
-                              <div
-                                className="match-players"
-                                style={{ alignItems: "center", gap: "0.5rem" }}
-                              >
+                              <div className="result-row p1">
                                 <strong>{playerTag(match.player_1_id)}</strong>
                                 <input
+                                  className="score-input"
                                   type="number"
+                                  inputMode="numeric"
                                   min={0}
                                   max={9}
+                                  placeholder="0"
                                   aria-label={`Marcador de ${playerTag(match.player_1_id)}`}
                                   value={input.a}
                                   disabled={busy}
-                                  style={{ width: "4rem" }}
                                   onChange={(e) =>
                                     setScoreInputs({
                                       ...scoreInputs,
@@ -907,15 +942,19 @@ function App() {
                                     })
                                   }
                                 />
-                                <span>:</span>
+                              </div>
+                              <div className="result-row p2">
+                                <strong>{playerTag(match.player_2_id)}</strong>
                                 <input
+                                  className="score-input"
                                   type="number"
+                                  inputMode="numeric"
                                   min={0}
                                   max={9}
+                                  placeholder="0"
                                   aria-label={`Marcador de ${playerTag(match.player_2_id)}`}
                                   value={input.b}
                                   disabled={busy}
-                                  style={{ width: "4rem" }}
                                   onChange={(e) =>
                                     setScoreInputs({
                                       ...scoreInputs,
@@ -923,7 +962,6 @@ function App() {
                                     })
                                   }
                                 />
-                                <strong>{playerTag(match.player_2_id)}</strong>
                               </div>
                               <button
                                 className="primary-btn full-btn"
@@ -935,6 +973,31 @@ function App() {
                             </div>
                           );
                         })}
+
+                        {correctableMatches.length > 0 && (
+                          <details className="finished-list">
+                            <summary>Corregir un resultado ({correctableMatches.length})</summary>
+                            {correctableMatches.map((match) => (
+                              <div className="finished-row" key={match.id}>
+                                <div>
+                                  <span className="finished-round">{match.round_name}</span>
+                                  <strong>
+                                    {playerTag(match.player_1_id)} {match.score_player_1 ?? 0} -{" "}
+                                    {match.score_player_2 ?? 0} {playerTag(match.player_2_id)}
+                                  </strong>
+                                </div>
+                                <button
+                                  className="secondary-btn"
+                                  disabled={resultBusyId === match.id}
+                                  onClick={() => void reopenMatch(match)}
+                                >
+                                  CORREGIR
+                                </button>
+                              </div>
+                            ))}
+                          </details>
+                        )}
+
                       </section>
                     )}
                   </div>
