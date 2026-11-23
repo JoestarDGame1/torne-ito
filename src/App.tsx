@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react"
 import type { Session } from "@supabase/supabase-js";
 import "./App.css";
 import { supabase } from "./lib/supabase";
@@ -49,6 +49,8 @@ function App() {
   const [generateBusy, setGenerateBusy] = useState(false);
   const [generateMessage, setGenerateMessage] = useState("");
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [musicOn, setMusicOn] = useState(false );
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [scoreInputs, setScoreInputs] = useState<Record<string, { a: string; b: string }>>({});
   const [resultBusyId, setResultBusyId] = useState<string | null>(null);
   const [resultMessage, setResultMessage] = useState("");
@@ -262,32 +264,48 @@ function App() {
       );
       await loadTournamentAndPlayers();
     }
+      
+    async function toggleMusic(){
+      const audio = audioRef.current;
+      if(!audio) return;
 
-      async function reopenMatch(match: Match) {
-    const p1 = playerTag(match.player_1_id);
-    const p2 = playerTag(match.player_2_id);
-
-    const confirmed = window.confirm(
-      `${p1} ${match.score_player_1 ?? 0} - ${match.score_player_2 ?? 0} ${p2}\n\nSe borrará este resultado y la partida volverá a pendiente para capturarla de nuevo. ¿Continuar?`,
-    );
-    if (!confirmed) return;
-
-    setResultBusyId(match.id);
-    setResultMessage("");
-
-    const { error } = await supabase.rpc("reopen_match", { p_match_id: match.id });
-
-    setResultBusyId(null);
-
-    if (error) {
-      console.error("Error corrigiendo resultado:", error.message);
-      setResultMessage(`No se pudo corregir: ${error.message}`);
-      return;
+      if(audio.paused){
+        audio.volume = 0.4;
+        try{
+          await audio.play();
+        }catch (error){
+          console.error("No se pudo reproducir el audio", error);
+        }
+      } else {
+        audio.pause();
+      }
     }
 
-    setResultMessage("Resultado borrado. Captura el resultado correcto en la lista de partidas listas.");
-    if (tournament) await loadMatches(tournament.id);
-  }
+      async function reopenMatch(match: Match) {
+        const p1 = playerTag(match.player_1_id);
+        const p2 = playerTag(match.player_2_id);
+
+        const confirmed = window.confirm(
+          `${p1} ${match.score_player_1 ?? 0} - ${match.score_player_2 ?? 0} ${p2}\n\nSe borrará este resultado y la partida volverá a pendiente para capturarla de nuevo. ¿Continuar?`,
+        );
+        if (!confirmed) return;
+
+        setResultBusyId(match.id);
+        setResultMessage("");
+
+        const { error } = await supabase.rpc("reopen_match", { p_match_id: match.id });
+
+        setResultBusyId(null);
+
+        if (error) {
+          console.error("Error corrigiendo resultado:", error.message);
+          setResultMessage(`No se pudo corregir: ${error.message}`);
+          return;
+        }
+
+        setResultMessage("Resultado borrado. Captura el resultado correcto en la lista de partidas listas.");
+        if (tournament) await loadMatches(tournament.id);
+      }
 
     async function reportResult(match: Match) {
     const input = scoreInputs[match.id] ?? { a: "", b: "" };
@@ -554,6 +572,16 @@ function App() {
         </nav>
 
         <div className="sidebar-bottom">
+          <button
+            className={musicOn ? "music-btn on" : "music-btn"}
+            onClick={() => void toggleMusic()}
+            aria-label={musicOn ? "Silenciar la música" : "Activar la música"}
+          >
+            <svg className="music-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <path fill="currentColor" d="M9 3v11.3A3.5 3.5 0 1 0 11 17.5V7h6V3H9z" />
+            </svg>
+            <span className="music-label">{musicOn ? "MÚSICA ON" : "MÚSICA OFF"}</span>
+          </button>
           <div className="live-indicator">
             <span /> SISTEMA EN DESARROLLO
           </div>
@@ -1042,6 +1070,14 @@ function App() {
           </footer>
         </div>
       </main>
+            <audio
+        ref={audioRef}
+        src="/musica.mp3"
+        loop
+        preload="none"
+        onPlay={() => setMusicOn(true)}
+        onPause={() => setMusicOn(false)}
+        />
     </div>
   );
 }
