@@ -35,6 +35,13 @@ type Match = {
   station: string | null;
 };
 
+type Sponsor = {
+  id: string;
+  name: string;
+  logo_url: string | null;
+  website: string | null;
+};
+
 function App() {
   const [tab, setTab] = useState<Tab>("Inicio");
   const [players, setPlayers] = useState<Player[]>([]);
@@ -51,6 +58,14 @@ function App() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [musicOn, setMusicOn] = useState(false );
   const audioRef = useRef<HTMLAudioElement>(null);
+  const userChoiceRef = useRef(false);
+  const [sponsors, setSponsors] = useState<Sponsor[]>([]);
+  const [sponsorName, setSponsorName] = useState("");
+  const [sponsorWebsite, setSponsorWebsite] = useState("");
+  const [sponsorFile, setSponsorFile] = useState<File | null>(null);
+  const [sponsorFileKey, setSponsorFileKey] = useState(0);
+  const [sponsorBusy, setSponsorBusy] = useState(false);
+  const [sponsorMessage, setSponsorMessage] = useState("");
   const [scoreInputs, setScoreInputs] = useState<Record<string, { a: string; b: string }>>({});
   const [resultBusyId, setResultBusyId] = useState<string | null>(null);
   const [resultMessage, setResultMessage] = useState("");
@@ -124,6 +139,40 @@ function App() {
   }, []);
 
     useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = 0.4;
+
+    const events = ["pointerdown", "keydown", "touchstart"] as const;
+
+    const cleanup = () => {
+      events.forEach((name) => window.removeEventListener(name, startOnInteraction));
+    };
+
+    function startOnInteraction(event: Event) {
+      if (userChoiceRef.current) {
+        cleanup();
+        return;
+      }
+      const target = event.target as Element | null;
+      if (target?.closest?.(".music-btn")) return;
+
+      audio!
+        .play()
+        .then(cleanup)
+        .catch(() => {});
+    }
+
+    audio
+      .play()
+      .then(cleanup)
+      .catch(() => {});
+
+    events.forEach((name) => window.addEventListener(name, startOnInteraction));
+    return cleanup;
+  }, []);
+
+    useEffect(() => {
     const refresh = () => {
       if (document.visibilityState === "visible") {
         void loadTournamentAndPlayers();
@@ -159,6 +208,7 @@ function App() {
     setTournament(currentTournament);
         await loadPlayers(currentTournament.id);
     await loadMatches(currentTournament.id);
+    await loadSponsors(currentTournament.id);
     setLastUpdate(new Date());
   }
 
@@ -264,22 +314,152 @@ function App() {
       );
       await loadTournamentAndPlayers();
     }
-      
-    async function toggleMusic(){
-      const audio = audioRef.current;
-      if(!audio) return;
+    
+  async function loadSponsors(tournamentId: string) {
+    const { data, error } = await supabase
+      .from("sponsors")
+      .select("id, name, logo_url, website")
+      .eq("tournament_id", tournamentId)
+      .order("created_at", { ascending: true });
 
-      if(audio.paused){
-        audio.volume = 0.4;
-        try{
-          await audio.play();
-        }catch (error){
-          console.error("No se pudo reproducir el audio", error);
-        }
-      } else {
-        audio.pause();
+    if (error) {
+      console.error("Error cargando patrocinadores:", error.message);
+      return;
+    }
+
+    setSponsors((data ?? []) as Sponsor[]);
+  }
+
+  async function addSponsor() {
+    setSponsorMessage("");
+    if (!tournament) return;
+
+    const name = sponsorName.trim();
+    if (!name) {
+      setSponsorMessage("Escribe el nombre del patrocinador.");
+      return;
+    }
+
+    if (!sponsorFile) {
+      setSponsorMessage("Elige el logo del patrocinador.");
+      return;
+    }
+
+    const allowed: Record<string, string> = {
+      "image/png": "png",
+      "image/jpeg": "jpg",
+      "image/webp": "webp",
+    };
+    const ext = allowed[sponsorFile.type];
+    if (!ext) {
+      setSponsorMessage("El logo debe ser PNG, JPG o WebP.");
+      return;
+    }
+
+    if (sponsorFile.size > 2 * 1024 * 1024) {
+      setSponsorMessage("El logo no puede pesar más de 2 MB.");
+      return;
+    }
+
+    let website: string | null = null;
+    const rawSite = sponsorWebsite.trim();
+    if (rawSite) {
+      try {
+        const url = new URL(/^https?:\/\//i.test(rawSite) ? rawSite : `https://${rawSite}`);
+        if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("protocolo");
+        website = url.toString();
+      } catch {
+        setSponsorMessage("El enlace no es válido. Ejemplo: https://mi-patrocinador.com");
+        return;
       }
     }
+
+    setSponsorBusy(true);
+
+    const path = `${tournament.id}/${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from("sponsor-logos")
+      .upload(path, sponsorFile, { contentType: sponsorFile.type });
+
+    if (uploadError) {
+      console.error("Error subiendo logo:", uploadError.message);
+      setSponsorBusy(false);
+      setSponsorMessage(`No se pudo subir el logo: ${uploadError.message}`);
+      return;
+    }
+
+    const { data: publicData } = supabase.storage.from("sponsor-logos").getPublicUrl(path);
+
+    const { error: insertError } = await supabase.from("sponsors").insert({
+      tournament_id: tournament.id,
+      name,
+      logo_url: publicData.publicUrl,
+      website,
+    });
+
+    if (insertError) {
+      console.error("Error guardando patrocinador:", insertError.message);
+      await supabase.storage.from("sponsor-logos").remove([path]);
+      setSponsorBusy(false);
+      setSponsorMessage(`No se pudo guardar: ${insertError.message}`);
+      return;
+    }
+
+    setSponsorBusy(false);
+    setSponsorName("");
+    setSponsorWebsite("");
+    setSponsorFile(null);
+    setSponsorFileKey((k) => k + 1);
+    setSponsorMessage("Patrocinador agregado.");
+    await loadSponsors(tournament.id);
+  }
+
+  async function deleteSponsor(sponsor: Sponsor) {
+    const confirmed = window.confirm(`¿Quitar a ${sponsor.name} de los patrocinadores?`);
+    if (!confirmed) return;
+
+    setSponsorBusy(true);
+    setSponsorMessage("");
+
+    const { error } = await supabase.from("sponsors").delete().eq("id", sponsor.id);
+
+    if (error) {
+      console.error("Error borrando patrocinador:", error.message);
+      setSponsorBusy(false);
+      setSponsorMessage(`No se pudo quitar: ${error.message}`);
+      return;
+    }
+
+    const marker = "/sponsor-logos/";
+    const index = sponsor.logo_url ? sponsor.logo_url.indexOf(marker) : -1;
+    if (sponsor.logo_url && index >= 0) {
+      const filePath = decodeURIComponent(sponsor.logo_url.slice(index + marker.length));
+      await supabase.storage.from("sponsor-logos").remove([filePath]);
+    }
+
+    setSponsorBusy(false);
+    setSponsorMessage("Patrocinador quitado.");
+    if (tournament) await loadSponsors(tournament.id);
+  }
+
+
+  async function toggleMusic() {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    userChoiceRef.current = true;
+
+    if (audio.paused) {
+      audio.volume = 0.4;
+      try {
+        await audio.play();
+      } catch (error) {
+        console.error("No se pudo reproducir el audio", error);
+      }
+    } else {
+      audio.pause();
+    }
+  }
 
       async function reopenMatch(match: Match) {
         const p1 = playerTag(match.player_1_id);
@@ -953,6 +1133,78 @@ function App() {
                       </button>
                                             {generateMessage && <p role="status">{generateMessage}</p>}
                     </section>
+                    <section className="panel">
+                      <span className="section-kicker">PATROCINADORES</span>
+                      <h3>Agregar patrocinador</h3>
+
+                      <label className="field-label" htmlFor="sponsor-name">
+                        Nombre
+                      </label>
+                      <input
+                        id="sponsor-name"
+                        type="text"
+                        value={sponsorName}
+                        onChange={(e) => setSponsorName(e.target.value)}
+                        placeholder="Nombre del patrocinador"
+                        maxLength={60}
+                        disabled={sponsorBusy}
+                      />
+
+                      <label className="field-label" htmlFor="sponsor-website">
+                        Enlace (opcional)
+                      </label>
+                      <input
+                        id="sponsor-website"
+                        type="text"
+                        inputMode="url"
+                        value={sponsorWebsite}
+                        onChange={(e) => setSponsorWebsite(e.target.value)}
+                        placeholder="https://mi-patrocinador.com"
+                        maxLength={200}
+                        disabled={sponsorBusy}
+                      />
+
+                      <label className="field-label" htmlFor="sponsor-file">
+                        Logo (PNG, JPG o WebP, máx. 2 MB)
+                      </label>
+                      <input
+                        key={sponsorFileKey}
+                        id="sponsor-file"
+                        className="file-input"
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        disabled={sponsorBusy}
+                        onChange={(e) => setSponsorFile(e.target.files?.[0] ?? null)}
+                      />
+
+                      {sponsorMessage && <p role="status">{sponsorMessage}</p>}
+
+                      <button
+                        className="primary-btn full-btn"
+                        onClick={() => void addSponsor()}
+                        disabled={sponsorBusy}
+                      >
+                        {sponsorBusy ? "GUARDANDO..." : "AGREGAR PATROCINADOR"}
+                      </button>
+
+                      {sponsors.length > 0 && (
+                        <div className="sponsor-admin-list">
+                          {sponsors.map((sponsor) => (
+                            <div className="sponsor-admin-row" key={sponsor.id}>
+                              {sponsor.logo_url && <img src={sponsor.logo_url} alt="" />}
+                              <strong>{sponsor.name}</strong>
+                              <button
+                                className="secondary-btn"
+                                disabled={sponsorBusy}
+                                onClick={() => void deleteSponsor(sponsor)}
+                              >
+                                QUITAR
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </section>                    
                     {tournament?.bracket_generated_at && (
                       <section className="panel" style={{ gridColumn: "1 / -1" }}>
                         <span className="section-kicker">RESULTADOS</span>
@@ -1062,6 +1314,37 @@ function App() {
             </Page>
           )}
 
+                    {sponsors.length > 0 && (
+            <section className="sponsors">
+              <span className="section-kicker">PATROCINADORES</span>
+              <div className="sponsor-row">
+                {sponsors.map((sponsor) => {
+                  const content = sponsor.logo_url ? (
+                    <img src={sponsor.logo_url} alt={sponsor.name} loading="lazy" />
+                  ) : (
+                    <span>{sponsor.name}</span>
+                  );
+                  return sponsor.website && /^https?:\/\//i.test(sponsor.website) ? (
+                    <a
+                      key={sponsor.id}
+                      className="sponsor-item"
+                      href={sponsor.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={sponsor.name}
+                    >
+                      {content}
+                    </a>
+                  ) : (
+                    <div key={sponsor.id} className="sponsor-item" title={sponsor.name}>
+                      {content}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
           <footer className="footer">
             <span>TORNE-ITO © 2026</span>
             <span>
@@ -1074,7 +1357,7 @@ function App() {
         ref={audioRef}
         src="/musica.mp3"
         loop
-        preload="none"
+        preload="auto"
         onPlay={() => setMusicOn(true)}
         onPause={() => setMusicOn(false)}
         />

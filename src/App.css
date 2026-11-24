@@ -395,3 +395,27 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   }
   .music-label { display: none; }
 }
+
+/* ---------- Patrocinadores ---------- */
+.sponsors { margin-top: 44px; padding-top: 22px; border-top: 4px solid var(--yellow); }
+.sponsor-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; }
+.sponsor-item {
+  display: grid; place-items: center; width: 190px; height: 92px; padding: 10px 16px;
+  background: #fff; color: #000; text-decoration: none;
+  font-family: var(--display); font-size: 22px; font-weight: 800; text-transform: uppercase; text-align: center;
+  clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  transition: transform .15s;
+}
+a.sponsor-item:hover { transform: translateY(-3px); }
+.sponsor-item img { max-width: 100%; max-height: 66px; object-fit: contain; display: block; }
+
+.file-input { padding: 10px !important; font-size: 14px !important; }
+.sponsor-admin-list { margin-top: 18px; border-top: 2px solid var(--line); }
+.sponsor-admin-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.sponsor-admin-row img { width: 64px; height: 44px; object-fit: contain; background: #fff; padding: 4px; flex-shrink: 0; }
+.sponsor-admin-row strong { flex: 1; min-width: 0; font-family: var(--display); font-size: 22px; font-weight: 800; text-transform: uppercase; overflow-wrap: anywhere; }
+.sponsor-admin-row .secondary-btn { min-height: 44px; padding: 8px 18px; font-size: 16px; }
+
+@media (max-width: 620px) {
+  .sponsor-item { width: calc(50% - 7px); height: 80px; }
+}
