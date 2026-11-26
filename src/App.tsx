@@ -11,7 +11,7 @@ type Tab =
   | "Partidas"
   | "Jugadores"
   | "Reglas"
-  | "Historial"
+  | "Eventos"
   | "Administración";
 type Route = Tab | "Pantalla";
 type AdminSection =
@@ -78,7 +78,7 @@ const SLUGS: Record<Route, string> = {
   Partidas: "partidas",
   Jugadores: "jugadores",
   Reglas: "reglas",
-  Historial: "historial",
+  Eventos: "Eventos",
   Pantalla: "pantalla",
   Administración: "admin",
 };
@@ -89,18 +89,18 @@ const ICONS: Record<Route, string> = {
   Partidas: "⚔",
   Jugadores: "♙",
   Reglas: "≡",
-  Historial: "↺",
+  Eventos: "↺",
   Pantalla: "▣",
   Administración: "⚙",
 };
 
 const NAVIGATION: Route[] = [
+  "Eventos",
   "Inicio",
   "Bracket",
   "Partidas",
   "Jugadores",
   "Reglas",
-  "Historial",
   "Pantalla",
   "Administración",
 ];
@@ -116,7 +116,11 @@ function parseHash(hash: string): Parsed {
   }
   const key = (parts[0] ?? "").toLowerCase();
   const found = (Object.keys(SLUGS) as Route[]).find((r) => SLUGS[r] !== "" && SLUGS[r] === key);
-  return { tab: found ?? "Inicio", tid };
+  let tab: Route = found ?? (tid ? "Inicio" : "Eventos");
+  if (!tid && tab !== "Eventos" && tab !== "Reglas" && tab !== "Administración") {
+    tab = "Eventos";
+  }
+  return { tab, tid };
 }
 
 function buildHash(tab: Route, tid: string | null) {
@@ -220,7 +224,9 @@ function App() {
 
   const tournament: Tournament | null = route.tid
     ? (allTournaments.find((t) => t.id === route.tid) ?? null)
-    : (allTournaments.find((t) => t.is_active) ?? null);
+    : tab === "Administración"
+      ? (allTournaments.find((t) => t.is_active) ?? null)
+      : null;
   const tournamentMissing = loaded && route.tid !== null && !tournament;
   const canManage =
     tournament !== null && (isOwner || (isStaff && tournament.owner_id === myId));
@@ -285,7 +291,7 @@ function App() {
           : "Listo para bracket";
 
   const sideStatus = !tournament
-    ? "SIN TORNEO ACTIVO"
+    ? (tab === "Eventos" ? "VARIOS EVENTOS" : "SIN TORNEO SELECCIONADO")
     : champion
       ? "TORNEO FINALIZADO"
       : tournament.bracket_generated_at
@@ -293,11 +299,6 @@ function App() {
         : tournament.registration_open
           ? "INSCRIPCIONES ABIERTAS"
           : "PRÓXIMAMENTE";
-
-  const viewingOther =
-    tournament !== null &&
-    !tournament.is_active &&
-    (tab === "Inicio" || tab === "Bracket" || tab === "Partidas" || tab === "Jugadores");
 
   /* ---------- Navegación ---------- */
 
@@ -394,7 +395,7 @@ function App() {
       .eq("bracket_type", "grand_final");
 
     if (error) {
-      console.error("Error cargando historial:", error.message);
+      console.error("Error cargando Eventos:", error.message);
       return null;
     }
 
@@ -458,7 +459,9 @@ function App() {
     const wanted = routeRef.current.tid;
     const target = wanted
       ? (list.find((t) => t.id === wanted) ?? null)
-      : (list.find((t) => t.is_active) ?? null);
+      : routeRef.current.tab === "Administración"
+        ? (list.find((t) => t.is_active) ?? null)
+        : null;
 
     if (!target) {
       shownIdRef.current = null;
@@ -489,7 +492,7 @@ function App() {
     if (s) setSponsors(s);
 
     const currentTab = routeRef.current.tab;
-    if (currentTab === "Historial" || currentTab === "Administración") {
+    if (currentTab === "Eventos" || currentTab === "Administración") {
       const h = await fetchHistory();
       if (seq !== seqRef.current) return;
       if (h) setHistory(h);
@@ -500,7 +503,7 @@ function App() {
 
   useEffect(() => {
     void loadAll();
-  }, [route.tid, route.tab === "Historial" || route.tab === "Administración"]);
+  }, [route.tid, route.tab === "Eventos" || route.tab === "Administración"]);
 
   useEffect(() => {
     const refresh = () => {
@@ -626,7 +629,7 @@ function App() {
 
     const confirmed = window.confirm(
       isOwner
-        ? `Se creará "${name}" y quedará como torneo principal.\n\nEl torneo anterior se conserva en el historial con su propio enlace. ¿Continuar?`
+        ? `Se creará "${name}" y quedará como torneo principal.\n\nEl torneo anterior se conserva en el Eventos con su propio enlace. ¿Continuar?`
         : `Se creará "${name}" a tu nombre. Solo tú podrás manejarlo. ¿Continuar?`,
     );
     if (!confirmed) return;
@@ -1303,6 +1306,17 @@ function App() {
     ...(isOwner ? (["Equipo"] as AdminSection[]) : []),
   ];
 
+    const navItems: Route[] = route.tid
+    ? NAVIGATION
+    : NAVIGATION.filter((i) => i === "Eventos" || i === "Reglas" || i === "Administración");
+
+  const eventGroup = (t: Tournament) => {
+    if (history[t.id]) return 3;
+    if (t.bracket_generated_at) return 0;
+    if (t.registration_open) return 1;
+    return 2;
+  };
+
   const pickNotice = (
     <div className="notice">
       {tournament
@@ -1317,8 +1331,8 @@ function App() {
 
   return (
     <>
-      {tab === "Pantalla" ? (
-        <Display
+{tab === "Pantalla" && route.tid ? (
+          <Display
           eventName={eventName}
           date={formatDate(tournament?.date)}
           location={tournament?.location || "Por confirmar"}
@@ -1346,11 +1360,11 @@ function App() {
 
             <div className="side-label">MENÚ PRINCIPAL</div>
             <nav>
-              {NAVIGATION.map((item) => (
+              {navItems.map((item) => (
                 <button
                   key={item}
                   className={tab === item ? "nav-item active" : "nav-item"}
-                  onClick={() => go(item)}
+                  onClick={() => go(item, item === "Eventos" ? null : undefined)}
                 >
                   <span className="nav-icon">{ICONS[item]}</span>
                   {item}
@@ -1409,21 +1423,16 @@ function App() {
             </header>
 
             <div className="content">
-              {viewingOther && tournament && (
-                <div className="notice banner">
-                  <span>
-                    Estás viendo <b>{tournament.name}</b>, que no es el torneo principal.
-                  </span>
-                  <button className="secondary-btn" onClick={goMain}>
-                    IR AL TORNEO PRINCIPAL
-                  </button>
-                </div>
+              {route.tid && tab !== "Administración" && tab !== "Eventos" && (
+                <button className="back-link" onClick={goMain}>
+                  ← TODOS LOS EVENTOS
+                </button>
               )}
 
               {showMissing && (
                 <div className="notice banner">
                   <span>No encontramos ese torneo. Revisa el enlace.</span>
-                  <button className="secondary-btn" onClick={() => go("Historial", null)}>
+                  <button className="secondary-btn" onClick={() => go("Eventos", null)}>
                     VER TODOS LOS TORNEOS
                   </button>
                 </div>
@@ -1636,34 +1645,44 @@ function App() {
                 </Page>
               )}
 
-              {tab === "Historial" && (
-                <Page title="Historial" subtitle="TODOS LOS TORNEOS">
-                  {allTournaments.length === 0 && <p className="empty">Todavía no hay torneos.</p>}
-                  {allTournaments.map((t) => {
-                    const champ = history[t.id];
-                    const isCurrent = tournament?.id === t.id;
-                    return (
-                      <div className="tournament-row history-row" key={t.id}>
-                        <div>
-                          <strong>{t.name}</strong>
-                          <small>
-                            {formatDate(t.date)} · {t.location || "Sin sede"}
-                          </small>
-                          {champ && <span className="champ-line">★ Campeón: {champ}</span>}
+              {tab === "Eventos" && (
+                <>
+                  <section className="hero-banner">
+                    <img src="/hero.png" alt="TORNE-ITO" />
+                  </section>
+                  <Page title="Eventos" subtitle="ELIGE UN TORNEO PARA SEGUIRLO EN VIVO">
+                    {!loaded && <p className="empty">Cargando torneos...</p>}
+                    {loaded && allTournaments.length === 0 && (
+                      <p className="empty">Todavía no hay torneos.</p>
+                    )}
+                    {[0, 1, 2, 3].map((g) => {
+                      const list = allTournaments.filter((t) => eventGroup(t) === g);
+                      if (list.length === 0) return null;
+                      const titles = ["EN VIVO", "INSCRIPCIONES ABIERTAS", "PRÓXIMAMENTE", "TERMINADOS"];
+                      return (
+                        <div key={g} className="event-group">
+                          <span className="section-kicker">{titles[g]}</span>
+                          <div className="event-grid">
+                            {list.map((t) => (
+                              <button
+                                key={t.id}
+                                className={`event-card g${g}`}
+                                onClick={() => go("Inicio", t.id)}
+                              >
+                                <span className="event-state">{statusLabel(t, history[t.id])}</span>
+                                <strong>{t.name}</strong>
+                                <small>
+                                  {formatDate(t.date)} · {t.location || "Sin sede"}
+                                </small>
+                                {history[t.id] && <em>★ Campeón: {history[t.id]}</em>}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                        <span className="badge-status">{statusLabel(t, champ)}</span>
-                        {t.is_active && <span className="badge-active">PRINCIPAL</span>}
-                        <button
-                          className="secondary-btn"
-                          disabled={isCurrent && (tab as Route) === "Inicio"}
-                          onClick={() => go("Inicio", t.is_active ? null : t.id)}
-                        >
-                          VER TORNEO
-                        </button>
-                      </div>
-                    );
-                  })}
-                </Page>
+                      );
+                    })}
+                  </Page>
+                </>
               )}
 
               {tab === "Administración" && (
