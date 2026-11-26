@@ -33,6 +33,7 @@ type Props = {
   shareUrl: string;
   musicOn: boolean;
   onToggleMusic: () => void;
+  onExit: () => void;
 };
 
 const ORDER = { winners: 1, losers: 2, grand_final: 3 } as const;
@@ -51,8 +52,15 @@ export default function Display({
   shareUrl,
   musicOn,
   onToggleMusic,
+  onExit,
 }: Props) {
   const [tick, setTick] = useState(0);
+
+    useEffect(() => {
+    return () => {
+      if (document.fullscreenElement) void document.exitFullscreen();
+    };
+  }, []);
 
   async function toggleFullscreen() {
     try {
@@ -238,9 +246,9 @@ export default function Display({
         <button className="screen-btn" onClick={onToggleMusic}>
           {musicOn ? "MÚSICA ON" : "MÚSICA OFF"}
         </button>
-        <a className="screen-btn" href="#">
+        <button className="screen-btn" onClick={onExit}>
           SALIR
-        </a>
+        </button>
       </div>
     </div>
   );
